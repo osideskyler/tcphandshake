@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TCP Handshake</title>
+<meta name="description" content="TCP Handshake — DJ duo. Upcoming parties and bookings.">
+<meta name="theme-color" content="#050805">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #050805;
+    --fg: #39ff7a;
+    --dim: #1f8a45;
+    --faint: #0f3d20;
+    --hot: #eaffef;
+    --warn: #ffb347;
+    --err: #ff5470;
+    --glow: 0 0 6px rgba(57, 255, 122, .55), 0 0 18px rgba(57, 255, 122, .18);
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 15px/1.5 "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+    text-shadow: var(--glow);
+    overflow-x: hidden;
+  }
+  /* CRT overlay: scanlines + vignette */
+  body::before, body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 10;
+  }
+  body::before {
+    background: repeating-linear-gradient(to bottom, rgba(0,0,0,.28) 0 1px, transparent 1px 3px);
+  }
+  body::after {
+    background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.65) 100%);
+    animation: flicker 4s infinite steps(1);
+  }
+  @keyframes flicker { 0%, 100% { opacity: 1 } 47% { opacity: .92 } 48% { opacity: 1 } }
+
+  main { max-width: 900px; margin: 0 auto; padding: 24px 16px 64px; }
+  pre { margin: 0; font: inherit; white-space: pre; }
+  .fit { overflow: hidden; }
+  .dim { color: var(--dim); text-shadow: none; }
+  .hot { color: var(--hot); }
+  .warn { color: var(--warn); text-shadow: 0 0 6px rgba(255,179,71,.5); }
+  .err { color: var(--err); text-shadow: 0 0 6px rgba(255,84,112,.5); }
+  .cursor::after {
+    content: "█"; animation: blink 1s steps(1) infinite; margin-left: 1px;
+  }
+  @keyframes blink { 50% { opacity: 0 } }
+
+  #boot { overflow: hidden; cursor: pointer; }
+  #boot pre { line-height: 1.45; font-size: inherit; }
+  .logo {
+    line-height: 1.02; color: var(--fg); margin: 28px 0 8px;
+    text-shadow: 0 0 8px rgba(57,255,122,.7), 0 0 28px rgba(57,255,122,.3);
+  }
+  .logo.glitch { animation: glitch .45s steps(2) 2; }
+  @keyframes glitch {
+    0% { transform: translate(0); filter: none }
+    25% { transform: translate(-3px, 1px); filter: hue-rotate(60deg) }
+    50% { transform: translate(2px, -1px) skewX(4deg) }
+    75% { transform: translate(-1px, 0); filter: hue-rotate(-60deg) }
+    100% { transform: translate(0); filter: none }
+  }
+  .status { margin-bottom: 28px; }
+
+  nav { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+  nav button {
+    font: inherit; color: var(--fg); background: transparent; text-shadow: inherit;
+    border: 1px solid var(--dim); padding: 10px 18px; cursor: pointer; min-height: 44px;
+  }
+  nav button:hover, nav button:focus-visible { background: var(--faint); outline: none; border-color: var(--fg); }
+  nav button[aria-pressed="true"] { background: var(--fg); color: var(--bg); text-shadow: none; }
+
+  [hidden] { display: none !important; }
+  .reveal { animation: reveal .25s ease-out; }
+  @keyframes reveal { from { opacity: 0; transform: translateY(4px) } }
+
+  /* Events */
+  .event {
+    border-left: 2px solid var(--dim); padding: 4px 0 4px 14px; margin: 16px 0;
+  }
+  .event.next { border-left-color: var(--fg); }
+  .event .title { color: var(--hot); font-weight: 700; }
+  .event a { color: var(--fg); }
+  .state { display: inline-block; padding: 0 6px; border: 1px solid currentColor; font-size: 12px; margin-right: 8px; }
+  .countdown { font-size: clamp(20px, 6vw, 34px); font-weight: 700; color: var(--hot); letter-spacing: .02em; }
+  h2 { font-size: inherit; font-weight: 400; margin: 28px 0 4px; }
+
+  /* Contact */
+  form { display: grid; gap: 14px; max-width: 640px; }
+  label { display: grid; grid-template-columns: 9.5em 1fr; align-items: baseline; gap: 8px; }
+  label span { color: var(--dim); text-shadow: none; }
+  input, textarea, select {
+    font: inherit; color: var(--hot); background: transparent; text-shadow: var(--glow);
+    border: 0; border-bottom: 1px dashed var(--dim); padding: 6px 2px; width: 100%; min-width: 0;
+    caret-color: var(--fg); border-radius: 0;
+  }
+  select option { background: var(--bg); color: var(--fg); }
+  textarea { resize: vertical; min-height: 90px; border: 1px dashed var(--dim); padding: 8px; }
+  input:focus, textarea:focus, select:focus { outline: none; border-color: var(--fg); background: rgba(57,255,122,.05); }
+  ::placeholder { color: var(--faint); text-shadow: none; }
+  .send {
+    justify-self: start; font: inherit; font-weight: 700; color: var(--bg); background: var(--fg);
+    border: 0; padding: 12px 22px; cursor: pointer; min-height: 44px; margin-top: 6px;
+  }
+  .send:hover, .send:focus-visible { background: var(--hot); outline: none; }
+  .send:disabled { opacity: .5; cursor: wait; }
+  #tx-log { margin-top: 18px; white-space: pre-wrap; }
+
+  footer { margin-top: 56px; font-size: 12px; }
+  footer a { color: var(--dim); }
+  .skip { position: fixed; right: 16px; bottom: 14px; font-size: 12px; z-index: 11; }
+
+  @media (max-width: 560px) {
+    body { font-size: 13px; }
+    label { grid-template-columns: 1fr; gap: 2px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body::after, .logo.glitch, .cursor::after { animation: none; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section id="boot" aria-live="polite"></section>
+
+  <section id="app" hidden>
+    <div class="fit"><pre class="logo" id="logo" aria-label="TCP Handshake">
+                        ████████╗ ██████╗██████╗
+                        ╚══██╔══╝██╔════╝██╔══██╗
+                           ██║   ██║     ██████╔╝
+                           ██║   ██║     ██╔═══╝
+                           ██║   ╚██████╗██║
+                           ╚═╝    ╚═════╝╚═╝
+
+██╗  ██╗ █████╗ ███╗   ██╗██████╗ ███████╗██╗  ██╗ █████╗ ██╗  ██╗███████╗
+██║  ██║██╔══██╗████╗  ██║██╔══██╗██╔════╝██║  ██║██╔══██╗██║ ██╔╝██╔════╝
+███████║███████║██╔██╗ ██║██║  ██║███████╗███████║███████║█████╔╝ █████╗
+██╔══██║██╔══██║██║╚██╗██║██║  ██║╚════██║██╔══██║██╔══██║██╔═██╗ ██╔══╝
+██║  ██║██║  ██║██║ ╚████║██████╔╝███████║██║  ██║██║  ██║██║  ██╗███████╗
+╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝</pre></div>
+    <div class="status dim">STATE: <span class="hot">ESTABLISHED</span> · DJ DUO · rx: bass · tx: vibes</div>
+
+    <nav aria-label="Sections">
+      <button type="button" data-view="events" aria-pressed="false">[1] ./events</button>
+      <button type="button" data-view="contact" aria-pressed="false">[2] ./contact</button>
+    </nav>
+
+    <section id="view-home" class="reveal">
+      <div class="dim">select a menu option, or press <span class="hot">1</span> / <span class="hot">2</span>.</div>
+      <div class="cursor" style="margin-top:8px">guest@tcphandshake:~$ </div>
+    </section>
+
+    <section id="view-events" hidden></section>
+
+    <section id="view-contact" hidden>
+      <div><span class="dim">guest@tcphandshake:~$</span> ./contact --book</div>
+      <p class="dim">Book TCP Handshake for your party, club night or event. Fill in the packet and we'll ACK back.</p>
+      <form id="book" novalidate>
+        <label><span>name&gt;</span><input name="name" required autocomplete="name" placeholder="your name"></label>
+        <label><span>email&gt;</span><input name="email" type="email" required autocomplete="email" placeholder="you@domain.com"></label>
+        <label><span>phone&gt;</span><input name="phone" type="tel" autocomplete="tel" placeholder="optional"></label>
+        <label><span>event_date&gt;</span><input name="date" type="date"></label>
+        <label><span>event_type&gt;</span>
+          <select name="type">
+            <option>house party</option><option>club night</option><option>school / campus event</option>
+            <option>wedding / private event</option><option>corporate</option><option>other</option>
+          </select>
+        </label>
+        <label><span>location&gt;</span><input name="location" placeholder="city / venue"></label>
+        <label><span>message&gt;</span><textarea name="message" placeholder="crowd size, vibe, hours, budget…"></textarea></label>
+        <button class="send" type="submit">SEND SYN ▶</button>
+      </form>
+      <pre id="tx-log" aria-live="polite"></pre>
+    </section>
+
+    <footer class="dim" id="footer"></footer>
+  </section>
+</main>
+<a href="#" class="skip dim" id="skip">[ skip ▸▸ ]</a>
+
+<script src="config.js"></script>
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  const boot = $("#boot"), app = $("#app");
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Reduced motion still plays the handshake line by line, just without typing/packet travel.
+  let fast = false;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, fast ? 0 : ms));
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  // Scale wide <pre> blocks down so ASCII art never overflows narrow screens.
+  // The boot log scales as one block so every line keeps the same size.
+  function fit() {
+    document.querySelectorAll(".fit > pre").forEach((pre) => {
+      pre.style.fontSize = "";
+      const base = parseFloat(getComputedStyle(pre).fontSize);
+      const ratio = pre.parentElement.clientWidth / pre.scrollWidth;
+      if (ratio < 1) pre.style.fontSize = base * ratio * 0.98 + "px";
+    });
+    if (boot.hidden) return;
+    boot.style.fontSize = "";
+    const base = parseFloat(getComputedStyle(boot).fontSize);
+    const widest = Math.max(BOOT_COLS, ...[...boot.querySelectorAll("pre")].map((p) => p.textContent.length));
+    const charW = measureChar();
+    const ratio = boot.clientWidth / (widest * charW);
+    if (ratio < 1) boot.style.fontSize = base * ratio * 0.98 + "px";
+  }
+  const BOOT_COLS = 56;
+  let probe;
+  function measureChar() {
+    if (!probe) {
+      probe = document.createElement("pre");
+      probe.style.cssText = "position:absolute;visibility:hidden;font-size:inherit";
+      probe.textContent = "0".repeat(100);
+    }
+    boot.appendChild(probe);
+    const w = probe.getBoundingClientRect().width / 100;
+    probe.remove();
+    return w;
+  }
+  addEventListener("resize", fit);
+
+  function line(html = "", cls = "") {
+    const pre = document.createElement("pre");
+    if (cls) pre.className = cls;
+    pre.innerHTML = html;
+    boot.appendChild(pre);
+    return pre;
+  }
+
+  async function type(pre, text, speed = 28) {
+    if (reduced) { pre.textContent = text; return sleep(300); }
+    for (let i = 1; i <= text.length; i++) {
+      pre.textContent = text.slice(0, i);
+      if (!fast) await sleep(speed + Math.random() * speed);
+    }
+  }
+
+  // Ladder diagram: two endpoints, packets travel between them.
+  const W = 30;
+  const arrow = (label, dir) => {
+    const core = ` ${label} `;
+    const n = W - core.length - 1, l = Math.floor(n / 2), r = n - l;
+    return dir > 0 ? "─".repeat(l) + core + "─".repeat(r) + "▶" : "◀" + "─".repeat(l) + core + "─".repeat(r);
+  };
+  const rail = (inner, note = "") => `    │ ${inner} │  ${note}`;
+
+  async function packet(label, dir, note) {
+    const pre = line();
+    const a = arrow(label, dir);
+    const steps = reduced ? 1 : 16;
+    for (let s = 1; s <= steps; s++) {
+      const k = Math.round((a.length * s) / steps);
+      const inner = dir > 0 ? a.slice(0, k).padEnd(W) : a.slice(a.length - k).padStart(W);
+      pre.innerHTML = esc(rail(inner));
+      await sleep(22);
+    }
+    pre.innerHTML = esc(rail(a)) + `<span class="dim">${esc(note)}</span>`;
+    await sleep(260);
+  }
+
+  async function intro() {
+    await document.fonts.ready;
+    fit();
+    const ip = `10.${(Math.random() * 255) | 0}.${(Math.random() * 255) | 0}.${((Math.random() * 250) | 0) + 2}`;
+    const port = 49152 + ((Math.random() * 16000) | 0);
+    await type(line("", "hot"), "guest@crowd:~$ ./connect --host tcphandshake --port 443", 22);
+    await sleep(250);
+    line(`<span class="dim">resolving tcphandshake ... 10.4.20.69</span>`);
+    await sleep(300);
+    line(`<span class="dim">opening socket ${ip}:${port} → 10.4.20.69:443</span>`);
+    await sleep(350);
+    line();
+    line(esc("    you@crowd".padEnd(W + 6) + "tcp@handshake"), "hot");
+    line(esc(rail(" ".repeat(W))));
+    await packet("SYN", 1, "seq=0 win=65535");
+    await packet("SYN, ACK", -1, "seq=0 ack=1");
+    await packet("ACK", 1, "seq=1 ack=1");
+    line(esc(rail(" ".repeat(W))));
+    line();
+    const est = line("", "hot");
+    await type(est, ">> CONNECTION ESTABLISHED", 30);
+    est.innerHTML += ` <span class="dim">(3-way handshake ok · ${(18 + Math.random() * 30).toFixed(1)}ms)</span>`;
+    await sleep(700);
+    show();
+  }
+
+  function show() {
+    if (!app.hidden) return;
+    fast = true;
+    boot.hidden = true;
+    $("#skip").hidden = true;
+    app.hidden = false;
+    const logo = $("#logo");
+    fit();
+    if (!reduced) {
+      logo.classList.add("glitch");
+      logo.addEventListener("animationend", () => logo.classList.remove("glitch"), { once: true });
+    }
+    route(location.hash.slice(1), false);
+  }
+
+  // Skip intro on click / key
+  $("#skip").addEventListener("click", (e) => { e.preventDefault(); show(); });
+  boot.addEventListener("click", show);
+  addEventListener("keydown", (e) => {
+    if (app.hidden) { if (e.key === "Enter" || e.key === " " || e.key === "Escape") show(); return; }
+    if (e.target.closest("input, textarea, select")) return;
+    if (e.key === "1") route("events");
+    else if (e.key === "2") route("contact");
+    else if (e.key === "Escape") route("");
+  });
+
+  // Views
+  const views = ["events", "contact"];
+  function route(name, push = true) {
+    if (!views.includes(name)) name = "";
+    $("#view-home").hidden = !!name;
+    for (const v of views) $("#view-" + v).hidden = v !== name;
+    document.querySelectorAll("nav button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.view === name));
+    const el = $("#view-" + (name || "home"));
+    el.classList.remove("reveal"); void el.offsetWidth; el.classList.add("reveal");
+    if (name === "events") renderEvents();
+    if (push) history.replaceState(null, "", name ? "#" + name : location.pathname);
+  }
+  document.querySelectorAll("nav button").forEach((b) =>
+    b.addEventListener("click", () => route(b.getAttribute("aria-pressed") === "true" ? "" : b.dataset.view))
+  );
+
+  // Events
+  const endOf = (d) => new Date(d + "T23:59:59");
+  const fmt = (d) => new Date(d + "T12:00:00").toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  let timer;
+  function renderEvents() {
+    clearInterval(timer);
+    const now = new Date();
+    const all = (window.EVENTS || []).slice().sort((a, b) => a.date.localeCompare(b.date));
+    const up = all.filter((e) => endOf(e.date) >= now);
+    const past = all.filter((e) => endOf(e.date) < now).reverse();
+
+    const card = (e, state, cls, isNext) => `
+      <div class="event ${isNext ? "next" : ""}">
+        <div><span class="state ${cls}">${state}</span><span class="title">${esc(e.title)}</span></div>
+        <div>${esc(fmt(e.date))}${e.time ? " · " + esc(e.time) : ""}</div>
+        <div class="dim">${esc([e.venue, e.city].filter(Boolean).join(" · "))}</div>
+        ${e.link ? `<div><a href="${esc(e.link)}" target="_blank" rel="noopener">→ tickets / info</a></div>` : ""}
+      </div>`;
+
+    let html = `<div><span class="dim">guest@tcphandshake:~$</span> netstat --parties</div>`;
+    if (up.length) {
+      html += `<h2 class="dim">// next connection in</h2><div class="countdown" id="cd"></div>`;
+      html += up.map((e, i) => card(e, i ? "LISTEN" : "SYN_SENT", i ? "dim" : "warn", !i)).join("");
+    } else {
+      html += `<p class="dim">no open connections. LISTENING on :443 for the next party…<br>want one? → <a href="#contact" data-go="contact" style="color:var(--fg)">./contact</a></p>`;
+    }
+    if (past.length) {
+      html += `<h2 class="dim">// connection log</h2>` + past.map((e) => card(e, "CLOSED", "dim")).join("");
+    }
+    const el = $("#view-events");
+    el.innerHTML = html;
+    el.querySelectorAll("[data-go]").forEach((a) => a.addEventListener("click", (ev) => { ev.preventDefault(); route(a.dataset.go); }));
+
+    if (up.length) {
+      const target = new Date(up[0].date + "T21:00:00");
+      const cd = $("#cd");
+      const tick = () => {
+        let s = Math.max(0, (target - new Date()) / 1000 | 0);
+        if (!s) { cd.textContent = "ESTABLISHED — tonight"; return; }
+        const d = s / 86400 | 0; s %= 86400;
+        const h = s / 3600 | 0; s %= 3600;
+        const m = s / 60 | 0; s %= 60;
+        const p = (n) => String(n).padStart(2, "0");
+        cd.textContent = `${d}d ${p(h)}h ${p(m)}m ${p(s)}s`;
+      };
+      tick();
+      timer = setInterval(tick, 1000);
+    }
+  }
+
+  // Contact
+  const form = $("#book"), log = $("#tx-log");
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(form));
+    if (!data.name.trim() || !/^\S+@\S+\.\S+$/.test(data.email)) {
+      log.innerHTML = `<span class="err">RST — need at least a name and a valid email.</span>`;
+      return;
+    }
+    const btn = form.querySelector(".send");
+    btn.disabled = true;
+    fast = false;
+    log.textContent = "";
+    const out = (t, cls = "") => { log.innerHTML += `<span class="${cls}">${esc(t)}</span>\n`; };
+    out("──▶ SYN      booking request from " + data.email, "dim");
+    await sleep(500);
+
+    const cfg = window.SITE || {};
+    let ok = true;
+    if (cfg.formEndpoint) {
+      try {
+        const res = await fetch(cfg.formEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(data),
+        });
+        ok = res.ok;
+      } catch { ok = false; }
+    } else {
+      const body = Object.entries(data).map(([k, v]) => `${k}: ${v}`).join("\n");
+      location.href = `mailto:${cfg.email}?subject=${encodeURIComponent("Booking request — " + data.name)}&body=${encodeURIComponent(body)}`;
+    }
+
+    if (ok) {
+      out("◀── SYN, ACK  request received", "dim");
+      await sleep(450);
+      out(cfg.formEndpoint ? ">> ESTABLISHED. We'll ACK back within 24h." : ">> Finish sending in your email app — we'll ACK back within 24h.", "hot");
+      if (cfg.formEndpoint) form.reset();
+    } else {
+      out(`✕ RST — couldn't send. Email us directly: ${cfg.email}`, "err");
+    }
+    btn.disabled = false;
+  });
+
+  // Footer
+  const cfg = window.SITE || {};
+  $("#footer").innerHTML =
+    `© ${new Date().getFullYear()} TCP Handshake · <a href="mailto:${esc(cfg.email)}">${esc(cfg.email)}</a>` +
+    (cfg.instagram ? ` · <a href="${esc(cfg.instagram)}" target="_blank" rel="noopener">instagram</a>` : "") +
+    ` · <a href="#" id="replay">replay handshake</a>`;
+  $("#replay").addEventListener("click", (e) => { e.preventDefault(); location.hash = ""; location.reload(); });
+
+  document.fonts.ready.then(fit);
+  intro();
+})();
+</script>
+</body>
+</html>
