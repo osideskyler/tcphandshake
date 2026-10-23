@@ -171,7 +171,6 @@
   }
   @media (prefers-reduced-motion: reduce) {
     body::after, .logo.glitch, .cursor::after { animation: none; }
-    .flyer [data-step].on { animation: none; transition: opacity .8s; }
   }
 </style>
 </head>
@@ -504,7 +503,8 @@
       flyer.style.setProperty("--jx", `${(Math.random() * 10 - 5).toFixed(1)}px`);
     });
     const steps = [...slot.querySelectorAll("[data-step]")];
-    const at = reduced ? [0, 0, 0, 0] : [2300, 3100, 3600, 4000];
+    // The flyer always plays in full, including the scare flashes, even with Reduce Motion on.
+    const at = [2300, 3100, 3600, 4000];
     steps.forEach((s, i) => flyerRun.timers.push(setTimeout(() => s.classList.add("on"), at[i])));
   }
 
@@ -644,25 +644,18 @@
     }
 
     size();
-    const onResize = () => { size(); if (reduced) draw(99); };
+    const onResize = () => size();
     addEventListener("resize", onResize);
     const t0 = performance.now();
-    if (reduced) {
-      canvas.style.transition = "opacity 1.2s";
-      canvas.style.opacity = 0;
-      draw(99);
-      requestAnimationFrame(() => (canvas.style.opacity = 1));
-    } else {
-      const loop = (now) => {
-        raf = requestAnimationFrame(loop);
-        const t = (now - t0) / 1000;
-        if (scareAt(t)) { drawScare(); last = 0; return; }
-        if (t > 5 && now - last < 1000 / 24) return; // idle: ~24fps is plenty
-        last = now;
-        draw(t);
-      };
+    const loop = (now) => {
       raf = requestAnimationFrame(loop);
-    }
+      const t = (now - t0) / 1000;
+      if (scareAt(t)) { drawScare(); last = 0; return; }
+      if (t > 5 && now - last < 1000 / 24) return; // idle: ~24fps is plenty
+      last = now;
+      draw(t);
+    };
+    raf = requestAnimationFrame(loop);
     return {
       timers,
       stop() {
