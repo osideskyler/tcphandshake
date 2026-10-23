@@ -123,8 +123,15 @@
   .flyer-where a { color: inherit; }
   .flyer-src { position: absolute; right: 8px; bottom: 4px; font-size: 11px; }
   .flyer-src a { color: var(--dim); }
+  /* During a scare burst the whole flyer jolts and its lettering splits into RGB ghosts. */
+  .flyer.scare { background: #0a0000; border-color: #5a0a0a; transform: translateX(var(--jx, 0)); }
+  .flyer.scare .flyer-title pre { color: #fff; text-shadow: -4px 0 #00e5ff, 4px 0 #ff0030, 0 0 18px #ff0000; }
+  .flyer.scare .flyer-title { transform: translateX(calc(var(--jx, 0) * -2)) skewX(-6deg); }
+  .flyer.scare .flyer-side, .flyer.scare .flyer-when, .flyer.scare .flyer-where {
+    color: #fff; text-shadow: -3px 0 #00e5ff, 3px 0 #ff0030; transform: translateX(calc(var(--jx, 0) * 1.5));
+  }
   .flyer [data-step] { opacity: 0; }
-  .flyer [data-step].on { opacity: 1; animation: rise .9s steps(6) both; }
+  .flyer [data-step].on { opacity: 1; animation: rise .9s steps(6) backwards; }
   @keyframes rise {
     0% { opacity: 0; transform: translateX(-4px); filter: blur(2px) }
     30% { opacity: 1; transform: translateX(3px) skewX(-8deg) }
@@ -491,33 +498,44 @@
       </div>`;
     fit();
     stopFlyer();
-    flyerRun = runSkull(slot.querySelector("canvas"), art);
+    const flyer = slot.querySelector(".flyer");
+    flyerRun = runSkull(slot.querySelector("canvas"), art, (on) => {
+      flyer.classList.toggle("scare", on);
+      flyer.style.setProperty("--jx", `${(Math.random() * 10 - 5).toFixed(1)}px`);
+    });
     const steps = [...slot.querySelectorAll("[data-step]")];
     const at = reduced ? [0, 0, 0, 0] : [2300, 3100, 3600, 4000];
     steps.forEach((s, i) => flyerRun.timers.push(setTimeout(() => s.classList.add("on"), at[i])));
   }
 
-  function runSkull(canvas, art) {
+  function runSkull(canvas, art, onScare) {
     const ctx = canvas.getContext("2d");
     const { cols, rows } = art;
-    const eyes = new Set(art.eyes);
     const cx = cols * 0.5, cy = rows * 0.45, maxD = Math.hypot(cx, cy);
-    const cells = [];
-    for (let y = 0; y < rows; y++) {
-      for (let x = 0; x < cols; x++) {
-        const ch = art.chars[y][x];
-        if (ch === " ") continue;
-        const v = RAMP.indexOf(ch) / (RAMP.length - 1);
-        const eye = eyes.has(y * cols + x);
-        const d = Math.hypot((x - cx) * 0.6, y - cy) / maxD;
-        cells.push({
-          x, y, ch, eye, v,
-          color: art.palette[B64.indexOf(art.colors[y][x])],
-          // Eyes ignite first; the face decodes from the center, faint smoke last.
-          delay: eye ? 0.25 + Math.random() * 0.25 : 0.9 + d * 1.8 + (1 - v) * 0.7 + Math.random() * 0.5,
-        });
+    const cellsOf = (frame) => {
+      const eyes = new Set(frame.eyes);
+      const out = [];
+      for (let y = 0; y < rows; y++) {
+        for (let x = 0; x < cols; x++) {
+          const ch = frame.chars[y][x];
+          if (ch === " ") continue;
+          const v = RAMP.indexOf(ch) / (RAMP.length - 1);
+          const eye = eyes.has(y * cols + x);
+          const d = Math.hypot((x - cx) * 0.6, y - cy) / maxD;
+          out.push({
+            x, y, ch, eye, v,
+            color: frame.palette[B64.indexOf(frame.colors[y][x])],
+            // Eyes ignite first; the face decodes from the center, faint smoke last.
+            delay: eye ? 0.25 + Math.random() * 0.25 : 0.9 + d * 1.8 + (1 - v) * 0.7 + Math.random() * 0.5,
+          });
+        }
       }
-    }
+      return out;
+    };
+    const cells = cellsOf(art);
+    // The scare frame: a nastier face the flyer flickers into for a split second.
+    const scare = art.alt ? cellsOf(art.alt) : null;
+    let bursts = [], nextScare = 6.5 + Math.random() * 3, scaring = false;
 
     let cw = 0, chH = 0, raf = 0, last = 0;
     const timers = [];
@@ -569,6 +587,62 @@
       }
     }
 
+    // Split-second jump scare: the alt face at full brightness, torn into bands
+    // and split into red/cyan ghosts like a corrupted video signal.
+    function drawScare() {
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#070000";
+      ctx.fillRect(0, 0, cols * cw, rows * chH);
+      const shift = new Float32Array(rows);
+      for (let b = 0; b < 4; b++) {
+        const y0 = (Math.random() * rows) | 0, h = 2 + ((Math.random() * 6) | 0);
+        const dx = (Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 9) * cw;
+        for (let y = y0; y < Math.min(rows, y0 + h); y++) shift[y] = dx;
+      }
+      for (const c of scare) {
+        if (c.eye) continue;
+        const ch = Math.random() < 0.12 ? RAMP[1 + ((Math.random() * (RAMP.length - 1)) | 0)] : c.ch;
+        const x = c.x * cw + shift[c.y], y = c.y * chH;
+        if (c.v > 0.55) {
+          ctx.globalAlpha = 0.35;
+          ctx.fillStyle = "#00e5ff";
+          ctx.fillText(ch, x - cw * 0.8, y);
+          ctx.fillStyle = "#ff0030";
+          ctx.fillText(ch, x + cw * 0.8, y);
+        }
+        ctx.globalAlpha = 0.45 + 0.55 * c.v;
+        ctx.fillStyle = c.color;
+        ctx.fillText(ch, x, y);
+      }
+      ctx.shadowColor = "#ff1a00";
+      ctx.shadowBlur = cw * 6;
+      ctx.globalAlpha = 1;
+      for (const c of scare) {
+        if (!c.eye) continue;
+        ctx.fillStyle = c.v > 0.6 ? "#fff4ec" : "#ff2a12";
+        ctx.fillText(c.ch, c.x * cw + shift[c.y], c.y * chH);
+      }
+    }
+
+    // Returns true while a scare burst is on screen. Bursts come every few seconds
+    // once the face has fully emerged; sometimes it flickers twice.
+    function scareAt(t) {
+      if (!scare) return false;
+      if (t >= nextScare) {
+        const d1 = 0.08 + Math.random() * 0.16;
+        bursts = [[t, t + d1]];
+        if (Math.random() < 0.35) {
+          const s2 = t + d1 + 0.06 + Math.random() * 0.06;
+          bursts.push([s2, s2 + 0.05 + Math.random() * 0.1]);
+        }
+        nextScare = bursts[bursts.length - 1][1] + 4 + Math.random() * 7;
+      }
+      const on = bursts.some(([s, e]) => t >= s && t < e);
+      if (on !== scaring) { scaring = on; onScare?.(on); }
+      return on;
+    }
+
     size();
     const onResize = () => { size(); if (reduced) draw(99); };
     addEventListener("resize", onResize);
@@ -582,6 +656,7 @@
       const loop = (now) => {
         raf = requestAnimationFrame(loop);
         const t = (now - t0) / 1000;
+        if (scareAt(t)) { drawScare(); last = 0; return; }
         if (t > 5 && now - last < 1000 / 24) return; // idle: ~24fps is plenty
         last = now;
         draw(t);
@@ -592,6 +667,7 @@
       timers,
       stop() {
         cancelAnimationFrame(raf);
+        if (scaring) onScare?.(false);
         timers.forEach(clearTimeout);
         removeEventListener("resize", onResize);
       },
