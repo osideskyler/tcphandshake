@@ -17,30 +17,19 @@ window.SITE = {
 
 // Parties. Dates are YYYY-MM-DD. Order doesn't matter: upcoming
 // shows sort to the top, past ones drop into the log automatically.
-// `link` is optional (tickets, RSVP, flyer).
+// `start` (24h) drives the countdown; `time` is what visitors see.
+// `link` is optional (tickets, RSVP). `flyer` names an ASCII flyer in
+// flyers/ (made with tools/flyer2ascii.py) shown while it's the next show.
 window.EVENTS = [
   {
-    date: "2026-11-14",
-    time: "10PM–2AM",
-    title: "SAMPLE — Packet Storm",
-    venue: "Venue TBA",
-    city: "Provo, UT",
-    link: "",
-  },
-  {
-    date: "2026-12-05",
-    time: "9PM–1AM",
-    title: "SAMPLE — Three-Way Handshake",
-    venue: "Venue TBA",
-    city: "Salt Lake City, UT",
-    link: "",
-  },
-  {
-    date: "2026-09-20",
-    time: "10PM–2AM",
-    title: "SAMPLE — 404 Night",
-    venue: "Somewhere",
-    city: "Provo, UT",
+    date: "2026-10-31",
+    start: "19:30",
+    time: "7:30PM",
+    title: "Halloween Party",
+    venue: "DM for address",
+    city: "",
+    details: ["Costumes required", "Live music & DJ"],
+    flyer: "halloween",
     link: "",
   },
 ];

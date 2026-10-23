@@ -80,6 +80,7 @@
   nav button[aria-pressed="true"] { background: var(--fg); color: var(--bg); text-shadow: none; }
 
   [hidden] { display: none !important; }
+  #view-events, #view-contact { scroll-margin-top: 16px; }
   .reveal { animation: reveal .25s ease-out; }
   @keyframes reveal { from { opacity: 0; transform: translateY(4px) } }
 
@@ -93,6 +94,44 @@
   .state { display: inline-block; padding: 0 6px; border: 1px solid currentColor; font-size: 12px; margin-right: 8px; }
   .countdown { font-size: clamp(20px, 6vw, 34px); font-weight: 700; color: var(--hot); letter-spacing: .02em; }
   h2 { font-size: inherit; font-weight: 400; margin: 28px 0 4px; }
+
+  /* Event flyers: ASCII art that rises out of the dark behind the glass */
+  .flyer {
+    --blood: #ff3b24; --ember: #ffb02e;
+    position: relative; margin: 14px 0 8px; padding: 18px 10px 22px;
+    background: #000; border: 1px solid var(--faint); overflow: hidden;
+  }
+  .flyer .fit { text-align: center; }
+  .flyer .fit pre { display: inline-block; text-align: left; }
+  .flyer-title pre {
+    color: var(--blood); line-height: 1.02;
+    text-shadow: 0 0 6px rgba(255, 59, 36, .8), 0 0 22px rgba(255, 30, 0, .35);
+  }
+  .flyer-art { position: relative; margin: 6px 0; }
+  .flyer-art canvas { display: block; width: 100%; }
+  .flyer-side {
+    position: absolute; left: 1.5%; top: 64%; color: var(--ember); font-weight: 700;
+    font-size: clamp(10px, 2.3vw, 21px); line-height: 1.25; text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(255, 176, 46, .6);
+  }
+  .flyer-when, .flyer-where {
+    text-align: center; color: var(--blood); font-weight: 700; text-transform: uppercase;
+    text-shadow: 0 0 8px rgba(255, 59, 36, .7);
+  }
+  .flyer-when { font-size: clamp(18px, 4.6vw, 36px); letter-spacing: .04em; }
+  .flyer-where { font-size: clamp(14px, 3.4vw, 26px); }
+  .flyer-where a { color: inherit; }
+  .flyer-src { position: absolute; right: 8px; bottom: 4px; font-size: 11px; }
+  .flyer-src a { color: var(--dim); }
+  .flyer [data-step] { opacity: 0; }
+  .flyer [data-step].on { opacity: 1; animation: rise .9s steps(6) both; }
+  @keyframes rise {
+    0% { opacity: 0; transform: translateX(-4px); filter: blur(2px) }
+    30% { opacity: 1; transform: translateX(3px) skewX(-8deg) }
+    50% { opacity: .3 }
+    70% { opacity: 1; transform: translateX(-1px) }
+    100% { opacity: 1; transform: none; filter: none }
+  }
 
   /* Contact */
   form { display: grid; gap: 14px; max-width: 640px; }
@@ -125,6 +164,7 @@
   }
   @media (prefers-reduced-motion: reduce) {
     body::after, .logo.glitch, .cursor::after { animation: none; }
+    .flyer [data-step].on { animation: none; transition: opacity .8s; }
   }
 </style>
 </head>
@@ -195,6 +235,7 @@
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   // Reduced motion still plays the handshake line by line, just without typing/packet travel.
   let fast = false;
+  let shownAt = 0;
   const sleep = (ms) => new Promise((r) => setTimeout(r, fast ? 0 : ms));
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -297,6 +338,7 @@
 
   function show() {
     if (!app.hidden) return;
+    shownAt = performance.now();
     fast = true;
     boot.hidden = true;
     $("#skip").hidden = true;
@@ -315,6 +357,8 @@
   boot.addEventListener("click", show);
   addEventListener("keydown", (e) => {
     if (app.hidden) { if (e.key === "Enter" || e.key === " " || e.key === "Escape") show(); return; }
+    // The key that skipped the intro shouldn't also navigate (e.g. Escape → home).
+    if (e.repeat || performance.now() - shownAt < 400) return;
     if (e.target.closest("input, textarea, select")) return;
     if (e.key === "1") route("events");
     else if (e.key === "2") route("contact");
@@ -330,11 +374,17 @@
     document.querySelectorAll("nav button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.view === name));
     const el = $("#view-" + (name || "home"));
     el.classList.remove("reveal"); void el.offsetWidth; el.classList.add("reveal");
+    stopFlyer();
     if (name === "events") renderEvents();
     if (push) history.replaceState(null, "", name ? "#" + name : location.pathname);
   }
   document.querySelectorAll("nav button").forEach((b) =>
-    b.addEventListener("click", () => route(b.getAttribute("aria-pressed") === "true" ? "" : b.dataset.view))
+    b.addEventListener("click", () => {
+      route(b.getAttribute("aria-pressed") === "true" ? "" : b.dataset.view);
+      // Bring the opened view up so a flyer rises in front of the visitor, not below the fold.
+      const open = $(`#view-${b.dataset.view}`);
+      if (!open.hidden) open.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+    })
   );
 
   // Events
@@ -353,10 +403,16 @@
         <div><span class="state ${cls}">${state}</span><span class="title">${esc(e.title)}</span></div>
         <div>${esc(fmt(e.date))}${e.time ? " · " + esc(e.time) : ""}</div>
         <div class="dim">${esc([e.venue, e.city].filter(Boolean).join(" · "))}</div>
+        ${e.details ? `<div class="dim">${e.details.map(esc).join(" · ")}</div>` : ""}
         ${e.link ? `<div><a href="${esc(e.link)}" target="_blank" rel="noopener">→ tickets / info</a></div>` : ""}
       </div>`;
 
-    let html = `<div><span class="dim">guest@tcphandshake:~$</span> netstat --parties</div>`;
+    let html = "";
+    const next = up[0];
+    if (next && next.flyer) {
+      html += `<div><span class="dim">guest@tcphandshake:~$</span> cat ./events/${esc(next.flyer)}.flyer</div><div id="flyer-slot"></div>`;
+    }
+    html += `<div style="margin-top:18px"><span class="dim">guest@tcphandshake:~$</span> netstat --parties</div>`;
     if (up.length) {
       html += `<h2 class="dim">// next connection in</h2><div class="countdown" id="cd"></div>`;
       html += up.map((e, i) => card(e, i ? "LISTEN" : "SYN_SENT", i ? "dim" : "warn", !i)).join("");
@@ -370,8 +426,10 @@
     el.innerHTML = html;
     el.querySelectorAll("[data-go]").forEach((a) => a.addEventListener("click", (ev) => { ev.preventDefault(); route(a.dataset.go); }));
 
+    if (next && next.flyer) mountFlyer($("#flyer-slot"), next);
+
     if (up.length) {
-      const target = new Date(up[0].date + "T21:00:00");
+      const target = new Date(`${up[0].date}T${up[0].start || "21:00"}:00`);
       const cd = $("#cd");
       const tick = () => {
         let s = Math.max(0, (target - new Date()) / 1000 | 0);
@@ -385,6 +443,159 @@
       tick();
       timer = setInterval(tick, 1000);
     }
+  }
+
+  // Flyers: colored ASCII art (generated by tools/flyer2ascii.py) drawn to a canvas.
+  // The face rises out of the dark: eyes ignite first, then glyphs decode outward.
+  const RAMP = " .,:;-~=+*ox%#@";
+  const B64 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_";
+  let flyerRun = null;
+
+  function loadFlyer(name) {
+    window.FLYERS = window.FLYERS || {};
+    if (FLYERS[name]) return Promise.resolve(FLYERS[name]);
+    return new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = `flyers/${encodeURIComponent(name)}.js`;
+      s.onload = () => res(FLYERS[name]);
+      s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+
+  function stopFlyer() {
+    if (!flyerRun) return;
+    flyerRun.stop();
+    flyerRun = null;
+  }
+
+  async function mountFlyer(slot, ev) {
+    let art;
+    try { art = await loadFlyer(ev.flyer); } catch { return; }
+    if (!slot.isConnected) return;
+    const cfg = window.SITE || {};
+    const short = new Date(ev.date + "T12:00:00").toLocaleDateString(undefined, { month: "long", day: "numeric" });
+    const where = cfg.instagram && /dm/i.test(ev.venue || "")
+      ? `<a href="${esc(cfg.instagram)}" target="_blank" rel="noopener">${esc(ev.venue)}</a>`
+      : esc(ev.venue || "");
+    slot.innerHTML = `
+      <div class="flyer" role="img" aria-label="${esc(`${ev.title} flyer: ${short} ${ev.time || ""}, ${(ev.details || []).join(", ")}, ${ev.venue || ""}`)}">
+        <div class="flyer-title" data-step>${art.title.map((t) => `<div class="fit"><pre>${esc(t.join("\n"))}</pre></div>`).join("")}</div>
+        <div class="flyer-art">
+          <canvas></canvas>
+          <div class="flyer-side" data-step>${(ev.details || []).map(esc).join("<br>")}</div>
+        </div>
+        <div class="flyer-when" data-step>${esc(short)}${ev.time ? ", " + esc(ev.time) : ""}</div>
+        <div class="flyer-where" data-step>${where}</div>
+        <div class="flyer-src"><a href="flyers/${esc(ev.flyer)}.webp" target="_blank" rel="noopener">[ original flyer ]</a></div>
+      </div>`;
+    fit();
+    stopFlyer();
+    flyerRun = runSkull(slot.querySelector("canvas"), art);
+    const steps = [...slot.querySelectorAll("[data-step]")];
+    const at = reduced ? [0, 0, 0, 0] : [2300, 3100, 3600, 4000];
+    steps.forEach((s, i) => flyerRun.timers.push(setTimeout(() => s.classList.add("on"), at[i])));
+  }
+
+  function runSkull(canvas, art) {
+    const ctx = canvas.getContext("2d");
+    const { cols, rows } = art;
+    const eyes = new Set(art.eyes);
+    const cx = cols * 0.5, cy = rows * 0.45, maxD = Math.hypot(cx, cy);
+    const cells = [];
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const ch = art.chars[y][x];
+        if (ch === " ") continue;
+        const v = RAMP.indexOf(ch) / (RAMP.length - 1);
+        const eye = eyes.has(y * cols + x);
+        const d = Math.hypot((x - cx) * 0.6, y - cy) / maxD;
+        cells.push({
+          x, y, ch, eye, v,
+          color: art.palette[B64.indexOf(art.colors[y][x])],
+          // Eyes ignite first; the face decodes from the center, faint smoke last.
+          delay: eye ? 0.25 + Math.random() * 0.25 : 0.9 + d * 1.8 + (1 - v) * 0.7 + Math.random() * 0.5,
+        });
+      }
+    }
+
+    let cw = 0, chH = 0, raf = 0, last = 0;
+    const timers = [];
+    function size() {
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      const w = canvas.clientWidth;
+      cw = w / cols;
+      chH = cw / 0.6;
+      canvas.style.height = rows * chH + "px";
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(rows * chH * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.font = `700 ${chH}px "JetBrains Mono", ui-monospace, monospace`;
+      ctx.textBaseline = "top";
+    }
+
+    function draw(t) {
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = "#000";
+      ctx.fillRect(0, 0, cols * cw, rows * chH);
+      const breath = 0.88 + 0.12 * Math.sin(t * 1.4);
+      // An occasional tear: a band of rows slips sideways for a moment.
+      const g = Math.floor(t / 3.7), gp = t - g * 3.7;
+      const tearY = gp < 0.12 && t > 5 ? (g * 37) % rows : -99;
+      const tearX = ((g % 2) ? 2 : -3) * cw;
+      for (const c of cells) {
+        if (c.eye) continue;
+        const a = Math.min(1, (t - c.delay) / 0.9);
+        if (a <= 0) continue;
+        let ch = c.ch;
+        if ((a < 1 && Math.random() < 0.45) || Math.random() < 0.002) ch = RAMP[1 + ((Math.random() * (RAMP.length - 1)) | 0)];
+        ctx.globalAlpha = a * a * (0.3 + 0.7 * c.v) * breath;
+        ctx.fillStyle = c.color;
+        const dx = c.y >= tearY && c.y < tearY + 3 ? tearX : 0;
+        ctx.fillText(ch, c.x * cw + dx, c.y * chH);
+      }
+      // Eyes: drawn last with a pulsing red glow.
+      const pulse = 0.75 + 0.25 * Math.sin(t * 3.1) + (Math.random() < 0.03 ? -0.4 : 0);
+      ctx.shadowColor = "#ff1a00";
+      ctx.shadowBlur = cw * 4 * Math.max(0, pulse);
+      for (const c of cells) {
+        if (!c.eye) continue;
+        const a = Math.min(1, (t - c.delay) / 0.5);
+        if (a <= 0) continue;
+        ctx.globalAlpha = Math.min(1, a * pulse);
+        ctx.fillStyle = c.v > 0.85 ? "#fff1e0" : "#ff2a12";
+        ctx.fillText(c.ch, c.x * cw, c.y * chH);
+      }
+    }
+
+    size();
+    const onResize = () => { size(); if (reduced) draw(99); };
+    addEventListener("resize", onResize);
+    const t0 = performance.now();
+    if (reduced) {
+      canvas.style.transition = "opacity 1.2s";
+      canvas.style.opacity = 0;
+      draw(99);
+      requestAnimationFrame(() => (canvas.style.opacity = 1));
+    } else {
+      const loop = (now) => {
+        raf = requestAnimationFrame(loop);
+        const t = (now - t0) / 1000;
+        if (t > 5 && now - last < 1000 / 24) return; // idle: ~24fps is plenty
+        last = now;
+        draw(t);
+      };
+      raf = requestAnimationFrame(loop);
+    }
+    return {
+      timers,
+      stop() {
+        cancelAnimationFrame(raf);
+        timers.forEach(clearTimeout);
+        removeEventListener("resize", onResize);
+      },
+    };
   }
 
   // Contact
