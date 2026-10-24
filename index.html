@@ -642,11 +642,11 @@
     function scareAt(t) {
       if (!scare) return false;
       if (t >= nextScare) {
-        const d1 = 0.2 + Math.random() * 0.2;
+        const d1 = 0.4 + Math.random() * 0.3;
         bursts = [[t, t + d1]];
         if (Math.random() < 0.35) {
-          const s2 = t + d1 + 0.08 + Math.random() * 0.06;
-          bursts.push([s2, s2 + 0.12 + Math.random() * 0.12]);
+          const s2 = t + d1 + 0.1 + Math.random() * 0.08;
+          bursts.push([s2, s2 + 0.2 + Math.random() * 0.15]);
         }
         nextScare = bursts[bursts.length - 1][1] + 4 + Math.random() * 7;
       }
