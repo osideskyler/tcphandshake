@@ -729,7 +729,7 @@
   // Footer
   const cfg = window.SITE || {};
   $("#footer").innerHTML =
-    `© ${new Date().getFullYear()} TCP Handshake · <a href="mailto:${esc(cfg.email)}">${esc(cfg.email)}</a>` +
+    `© ${new Date().getFullYear()} TCP Handshake` +
     (cfg.instagram ? ` · <a href="${esc(cfg.instagram)}" target="_blank" rel="noopener">instagram</a>` : "") +
     ` · <a href="#" id="replay">replay handshake</a>`;
   $("#replay").addEventListener("click", (e) => { e.preventDefault(); location.hash = ""; location.reload(); });
