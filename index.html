@@ -691,6 +691,11 @@
       log.innerHTML = `<span class="err">RST — need at least a name and a valid email.</span>`;
       return;
     }
+    const cfg = window.SITE || {};
+    if (!cfg.formEndpoint && !cfg.email) {
+      log.innerHTML = `<span class="warn">LISTEN — our booking inbox isn't open yet. Check back soon.</span>`;
+      return;
+    }
     const btn = form.querySelector(".send");
     btn.disabled = true;
     fast = false;
@@ -699,7 +704,6 @@
     out("──▶ SYN      booking request from " + data.email, "dim");
     await sleep(500);
 
-    const cfg = window.SITE || {};
     let ok = true;
     if (cfg.formEndpoint) {
       try {
@@ -721,7 +725,7 @@
       out(cfg.formEndpoint ? ">> ESTABLISHED. We'll ACK back within 24h." : ">> Finish sending in your email app — we'll ACK back within 24h.", "hot");
       if (cfg.formEndpoint) form.reset();
     } else {
-      out(`✕ RST — couldn't send. Email us directly: ${cfg.email}`, "err");
+      out(cfg.email ? `✕ RST — couldn't send. Email us directly: ${cfg.email}` : "✕ RST — couldn't send. Try again in a bit.", "err");
     }
     btn.disabled = false;
   });

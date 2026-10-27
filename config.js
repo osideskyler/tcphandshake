@@ -4,8 +4,9 @@
 
 window.SITE = {
   // Booking requests go here. With no formEndpoint, the form opens
-  // the visitor's email app addressed to this address.
-  email: "booking@example.com",
+  // the visitor's email app addressed to this address. Leave both
+  // empty and the form says bookings aren't open yet.
+  email: "",
 
   // Optional: a Formspree (or similar) endpoint, e.g.
   // "https://formspree.io/f/abcd1234". When set, the form sends
