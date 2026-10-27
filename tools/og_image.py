@@ -83,7 +83,7 @@ gd.text((x0, y), "OCT 31 · 7:30PM", font=font(38 * S, True), fill=(150, 30, 15)
 y += 56 * S
 bd.text((x0, y), "COSTUMES REQUIRED · LIVE MUSIC & DJ", font=font(19 * S, True), fill=EMBER)
 y += 34 * S
-bd.text((x0, y), "DM FOR ADDRESS", font=font(19 * S, True), fill=EMBER)
+bd.text((x0, y), "3675 N TIMPVIEW DR, PROVO, UT", font=font(19 * S, True), fill=EMBER)
 
 # Bloom, then CRT scanlines.
 bloom = glow.filter(ImageFilter.GaussianBlur(9 * S))

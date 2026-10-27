@@ -26,7 +26,7 @@ window.EVENTS = [
     start: "19:30",
     time: "7:30PM",
     title: "Halloween Party",
-    venue: "DM for address",
+    venue: "3675 N Timpview Dr, Provo, UT",
     city: "",
     details: ["Costumes required", "Live music & DJ"],
     flyer: "halloween",
